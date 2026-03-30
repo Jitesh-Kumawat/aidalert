@@ -176,7 +176,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function drawRescueRoute(destinationStr, id, zoomToPath = true) {
     if (!map) return;
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationStr)}`);
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationStr)}`, {
+    headers: {
+        'User-Agent': 'RescueApp/1.0 (nikhil.verma521975@gamil.com)'
+    }
+});
         const data = await response.json();
         if (data && data.length > 0) {
             const destLocation = L.latLng(data[0].lat, data[0].lon);
@@ -193,13 +197,23 @@ async function drawRescueRoute(destinationStr, id, zoomToPath = true) {
 
             activeRoutes[id] = { control: newRouteControl, marker: destMarker, destination: destinationStr, color: routeColor, distance: `${instantDistKm} km`, time: 'Calculating...' };
             
-            newRouteControl.on('routesfound', (e) => {
-                const summary = e.routes[0].summary;
-                activeRoutes[id].distance = (summary.totalDistance / 1000).toFixed(1) + ' km';
-                activeRoutes[id].time = Math.round(summary.totalTime / 60) + ' min';
-                rescueLegend.update();
+            newRouteControl.on('routesfound', function(e) {
+                 const route = e.routes[0];
+
+                const timeInMinutes = Math.round(route.summary.totalTime / 60);
+                 const distanceInKm = (route.summary.totalDistance / 1000).toFixed(1);
+
+                 activeRoutes[id].time = `${timeInMinutes} min`;
+                 activeRoutes[id].distance = `${distanceInKm} km`;
+
+                console.log(`Route to ${destinationStr}: ${distanceInKm} km, ${timeInMinutes} min`);
             });
-            if (zoomToPath) map.flyTo(destLocation, 8);
+            if (zoomToPath) {
+                newRouteControl.on('routesfound', function(e) {
+                    const bounds = L.latLngBounds(e.routes[0].coordinates);
+                    map.fitBounds(bounds);
+                 });
+            }map.flyTo(destLocation, 8);
             rescueLegend.update();
         }
     } catch (error) { console.error("Routing failed", error); }
