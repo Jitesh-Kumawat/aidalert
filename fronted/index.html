@@ -1,91 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Disaster Management System</title>
-    
+
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
     <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    
+
+    <style>
+        /* Inline critical fixes for dropdowns */
+        #sosFilterBar select option {
+            color: #1a1a2e;
+            background: #ffffff;
+            font-weight: 500;
+        }
+        #sosFilterBar select,
+        #sosFilterBar input[type="text"] {
+            color: white;
+        }
+        #sosFilterBar input[type="text"]::placeholder {
+            color: rgba(255,255,255,0.55);
+        }
+    </style>
 </head>
+
 <body>
+
+    <!-- ═══════════════════════════════════ HEADER ═══════════════════════════════════ -->
     <header class="header">
         <div class="container">
             <div class="logo">
                 <i class="fas fa-shield-alt"></i>
-                <h1>Disaster Management <span style="font-size: 0.7rem; background: #f1c40f; color: #000; padding: 2px 6px; border-radius: 4px; vertical-align: middle; margin-left: 5px;">AI POWERED</span></h1>
+                <h1>Disaster Management
+                    <span style="font-size:0.7rem; background:#f1c40f; color:#000;
+                                 padding:2px 6px; border-radius:4px;
+                                 vertical-align:middle; margin-left:5px;">AI POWERED</span>
+                </h1>
             </div>
             <nav class="nav">
                 <button class="menu-toggle" id="menuToggle">
                     <i class="fas fa-bars"></i>
                 </button>
                 <ul class="nav-menu" id="navMenu">
-                    <li><a href="#dashboard" class="nav-link active">Dashboard</a></li>
-                    <li><a href="#alerts" class="nav-link">Alerts</a></li>
-                    <li><a href="#resources" class="nav-link">Resources</a></li>
-                    <li><a href="#reports" class="nav-link">Emergency Help</a></li>
+                    <li><a href="#dashboard" class="nav-link active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="#alerts" class="nav-link">
+                        <i class="fas fa-exclamation-triangle"></i> Alerts</a></li>
+                    <li><a href="#resources" class="nav-link">
+                        <i class="fas fa-truck"></i> Resources</a></li>
+                    <li><a href="#reports" class="nav-link">
+                        <i class="fas fa-bell"></i> Emergency Help</a></li>
                 </ul>
             </nav>
         </div>
     </header>
 
     <main class="main">
+
+        <!-- ═══════════════════════════════ DASHBOARD ═══════════════════════════════ -->
         <section id="dashboard" class="section active">
             <div class="container">
                 <h2>Dashboard Overview</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <div>
-                            <h3 id="activeAlerts">0</h3>
-                            <p>Active Alerts</p>
-                        </div>
+                        <div><h3 id="activeAlerts">0</h3><p>Active Alerts</p></div>
                     </div>
                     <div class="stat-card">
                         <i class="fas fa-users"></i>
-                        <div>
-                            <h3 id="evacuated">1,247</h3>
-                            <p>Evacuated</p>
-                        </div>
+                        <div><h3 id="evacuated">1,247</h3><p>Evacuated</p></div>
                     </div>
                     <div class="stat-card">
                         <i class="fas fa-heartbeat"></i>
-                        <div>
-                            <h3 id="casualties">34</h3>
-                            <p>Casualties</p>
-                        </div>
+                        <div><h3 id="casualties">34</h3><p>Casualties</p></div>
                     </div>
                     <div class="stat-card">
                         <i class="fas fa-warehouse"></i>
-                        <div>
-                            <h3 id="supplies">87%</h3>
-                            <p>Supplies Available</p>
-                        </div>
+                        <div><h3 id="supplies">87%</h3><p>Supplies Available</p></div>
                     </div>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="card">
                         <h3><i class="fas fa-map-marker-alt"></i> Live Map</h3>
-                        <div id="map" class="map-placeholder" style="height: 450px; border-radius: 12px; overflow: hidden;">
-                            </div>
+                        <div id="map" class="map-placeholder"
+                             style="height:450px; border-radius:12px; overflow:hidden;"></div>
                     </div>
                     <div class="card">
                         <h3><i class="fas fa-history"></i> Recent Alerts</h3>
-                        <ul id="recentAlerts" class="alert-list">
-                            </ul>
+                        <ul id="recentAlerts" class="alert-list"></ul>
                     </div>
                 </div>
             </div>
         </section>
 
+        <!-- ════════════════════════════════ ALERTS ════════════════════════════════ -->
         <section id="alerts" class="section">
             <div class="container">
                 <div class="section-header">
@@ -98,6 +116,7 @@
             </div>
         </section>
 
+        <!-- ══════════════════════════════ RESOURCES ══════════════════════════════ -->
         <section id="resources" class="section">
             <div class="container">
                 <h2>Resource Management</h2>
@@ -124,30 +143,95 @@
             </div>
         </section>
 
+        <!-- ══════════════════════════ INCOMING SOS ═══════════════════════════════ -->
         <section id="reports" class="section">
             <div class="container">
-                <h2>Emergency Help Desk</h2>
-                <div class="quick-actions">
-                    <button class="btn btn-primary btn-large" id="quickFood"><i class="fas fa-utensils"></i> Food/Water</button>
-                    <button class="btn btn-primary btn-large" id="quickMedical"><i class="fas fa-medkit"></i> Medical</button>
-                    <button class="btn btn-primary btn-large" id="quickShelter"><i class="fas fa-home"></i> Shelter</button>
-                    <button class="btn btn-secondary btn-large" id="quickCustom"><i class="fas fa-plus"></i> Other Need</button>
+                <h2><i class="fas fa-bell"></i> Incoming SOS Requests</h2>
+                <span class="sos-subtitle">Live citizen distress signals from the mobile app</span>
+
+                <!-- Stats Bar -->
+                <div id="requestStats"></div>
+
+                <!-- Toolbar -->
+                <div class="sos-toolbar">
+                    <h3>
+                        <i class="fas fa-list"></i> All Requests
+                        <span class="sos-count-badge" id="totalCount">0</span>
+                    </h3>
+                    <button onclick="fetchHelpRequests()" class="sos-refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
                 </div>
-                <div class="reports-grid">
-                    <div class="card">
-                        <h3>Recent Requests</h3>
-                        <div id="recentRequests" class="alert-list"></div>
-                    </div>
-                        <div class="card">
-                        <h3>Status</h3>
-                        <div id="requestStats" class="stats-grid">
-                        </div>
-                    </div>
+
+                <!-- Filter Bar -->
+                <div id="sosFilterBar" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px; align-items:center;
+                     background:rgba(255,255,255,0.1); backdrop-filter:blur(12px);
+                     border:1px solid rgba(255,255,255,0.2); border-radius:16px; padding:14px 18px;">
+
+                    <!-- Search -->
+                    <input type="text" id="sosSearch" placeholder="🔍  Search name / location / phone..."
+                        oninput="debounceSearch(this.value)"
+                        style="flex:1; min-width:200px; padding:10px 18px; border-radius:25px;
+                               border:1.5px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.12);
+                               color:white; font-size:0.88rem; outline:none;">
+
+                    <!-- Status -->
+                    <select id="filterStatus" onchange="applyFilters()"
+                        style="padding:10px 16px; border-radius:25px;
+                               border:1.5px solid rgba(255,255,255,0.3);
+                               background:rgba(255,255,255,0.12);
+                               font-size:0.85rem; outline:none; cursor:pointer; font-weight:600;">
+                        <option value=""       style="color:#333; background:#fff;">— All Status —</option>
+                        <option value="pending"  style="color:#e74c3c; background:#fff; font-weight:700;">● Pending</option>
+                        <option value="assigned" style="color:#2980b9; background:#fff; font-weight:700;">● Dispatched</option>
+                        <option value="resolved" style="color:#27ae60; background:#fff; font-weight:700;">● Resolved</option>
+                    </select>
+
+                    <!-- Urgency -->
+                    <select id="filterUrgency" onchange="applyFilters()"
+                        style="padding:10px 16px; border-radius:25px;
+                               border:1.5px solid rgba(255,255,255,0.3);
+                               background:rgba(255,255,255,0.12);
+                               font-size:0.85rem; outline:none; cursor:pointer; font-weight:600;">
+                        <option value=""         style="color:#333; background:#fff;">— All Urgency —</option>
+                        <option value="critical"  style="color:#c0392b; background:#fff; font-weight:700;">🚨 Critical</option>
+                        <option value="high"      style="color:#e67e22; background:#fff; font-weight:700;">🔶 High</option>
+                        <option value="medium"    style="color:#f39c12; background:#fff; font-weight:700;">🟡 Medium</option>
+                        <option value="low"       style="color:#27ae60; background:#fff; font-weight:700;">🟢 Low</option>
+                    </select>
+
+                    <!-- Type -->
+                    <select id="filterType" onchange="applyFilters()"
+                        style="padding:10px 16px; border-radius:25px;
+                               border:1.5px solid rgba(255,255,255,0.3);
+                               background:rgba(255,255,255,0.12);
+                               font-size:0.85rem; outline:none; cursor:pointer; font-weight:600;">
+                        <option value=""          style="color:#333; background:#fff;">— All Types —</option>
+                        <option value="Medical"   style="color:#e74c3c; background:#fff;">🏥 Medical</option>
+                        <option value="Rescue"    style="color:#8e44ad; background:#fff;">🛟 Rescue</option>
+                        <option value="Supplies"  style="color:#e67e22; background:#fff;">📦 Supplies</option>
+                        <option value="Other"     style="color:#7f8c8d; background:#fff;">❓ Other</option>
+                    </select>
+
+                    <!-- Clear -->
+                    <button onclick="clearFilters()"
+                        style="padding:10px 18px; border-radius:25px;
+                               border:1.5px solid rgba(255,255,255,0.4);
+                               background:rgba(255,255,255,0.1);
+                               color:white; font-size:0.85rem; cursor:pointer;
+                               font-weight:600; transition:all 0.2s;">
+                        ✕ Clear
+                    </button>
                 </div>
+
+                <!-- Requests List -->
+                <div id="recentRequests"></div>
             </div>
         </section>
+
     </main>
 
+    <!-- ═══════════════════════════ NEW ALERT MODAL ═══════════════════════════════ -->
     <div class="modal" id="newAlertModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -155,13 +239,19 @@
                 <button class="modal-close" id="closeAlertModal">&times;</button>
             </div>
             <form id="alertForm">
-                <div class="form-group" style="background: #fdf2e9; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 2px dashed #e67e22;">
-                    <label style="color: #d35400; font-weight: bold;"><i class="fas fa-robot"></i> 1. AI Pothole/Damage Scan</label>
-                    <input type="file" id="hazardImage" accept="image/*" class="form-control" style="margin-top: 10px;">
-                    <button type="button" class="btn btn-warning" id="aiScanBtn" style="width:100%; margin-top:10px;">
+                <div class="form-group"
+                     style="background:#fdf2e9; padding:15px; border-radius:10px;
+                            margin-bottom:15px; border:2px dashed #e67e22;">
+                    <label style="color:#d35400; font-weight:bold;">
+                        <i class="fas fa-robot"></i> 1. AI Pothole/Damage Scan
+                    </label>
+                    <input type="file" id="hazardImage" accept="image/*"
+                           class="form-control" style="margin-top:10px;">
+                    <button type="button" class="btn btn-warning" id="aiScanBtn"
+                            style="width:100%; margin-top:10px;">
                         <i class="fas fa-search"></i> Run AI Analysis
                     </button>
-                    <p id="aiStatus" style="font-size: 0.75rem; margin-top: 5px; color: #666;"></p>
+                    <p id="aiStatus" style="font-size:0.75rem; margin-top:5px; color:#666;"></p>
                 </div>
 
                 <div class="form-group">
@@ -176,7 +266,8 @@
                 </div>
                 <div class="form-group">
                     <label>Location</label>
-                    <input type="text" name="location" id="alertLocation" placeholder="Address or Coordinates" required>
+                    <input type="text" name="location" id="alertLocation"
+                           placeholder="Address or Coordinates" required>
                 </div>
                 <div class="form-group">
                     <label>Severity</label>
@@ -191,11 +282,14 @@
                     <label>Description</label>
                     <textarea name="description" id="alertDescription" rows="3" required></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary" id="alertSubmitBtn" style="width:100%">Submit Official Alert</button>
+                <button type="submit" class="btn btn-primary" id="alertSubmitBtn" style="width:100%">
+                    Submit Official Alert
+                </button>
             </form>
         </div>
     </div>
 
+    <!-- ════════════════════════ FAST HELP MODAL (kept for legacy) ════════════════ -->
     <div class="modal" id="fastHelpModal">
         <div class="modal-content">
             <div class="modal-header">

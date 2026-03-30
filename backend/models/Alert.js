@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 
-const alertSchema = new mongoose.Schema({
-  type: { type: String, required: true }, // flood, fire, earthquake
+const AlertSchema = new mongoose.Schema({
+  type: { type: String, required: true },
   location: { type: String, required: true },
-  severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], required: true },
-  description: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
+  description: { type: String },
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  timestamp: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model('Alert', alertSchema);
+module.exports = mongoose.model('Alert', AlertSchema);
