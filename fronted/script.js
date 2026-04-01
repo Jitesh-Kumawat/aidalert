@@ -46,7 +46,7 @@ let govBaseLocation = L.latLng(25.1433, 75.8080); // Exact RTU Kota Location
 // let rescueLegend; 
 let isLegendOpen = false;
 
-const API_BASE = 'http://192.168.1.16:5000/api';
+const API_BASE = '/api';
 
 // ✅ Define red icon for hazard markers
 const redIcon = L.icon({
@@ -263,7 +263,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function drawRescueRoute(destinationStr, id, zoomToPath = true) {
     if (!map) return;
     try {
-<<<<<<< HEAD
         let destLocation;
 
         // ✅ FIX: Check if location is GPS coords (from Flutter app)
@@ -280,7 +279,12 @@ async function drawRescueRoute(destinationStr, id, zoomToPath = true) {
         } else {
             // Web dashboard text format: geocode via Nominatim
             const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationStr)}`
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationStr)}`,
+                {
+                    headers: {
+                        'User-Agent': 'RescueApp/1.0 (nikhil.verma521975@gamil.com)'
+                    }
+                }
             );
             const data = await response.json();
             if (!data || data.length === 0) {
@@ -288,47 +292,6 @@ async function drawRescueRoute(destinationStr, id, zoomToPath = true) {
                 return;
             }
             destLocation = L.latLng(data[0].lat, data[0].lon);
-=======
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationStr)}`, {
-    headers: {
-        'User-Agent': 'RescueApp/1.0 (nikhil.verma521975@gamil.com)'
-    }
-});
-        const data = await response.json();
-        if (data && data.length > 0) {
-            const destLocation = L.latLng(data[0].lat, data[0].lon);
-            if (activeRoutes[id]) { map.removeControl(activeRoutes[id].control); map.removeLayer(activeRoutes[id].marker); }
-            const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f1c40f'];
-            const routeColor = colors[Object.keys(activeRoutes).length % colors.length];
-            const instantDistKm = (govBaseLocation.distanceTo(destLocation) / 1000).toFixed(1);
-            const destMarker = L.marker(destLocation, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [25, 41], iconAnchor: [12, 41] }) }).addTo(map);
-            const newRouteControl = L.Routing.control({
-                waypoints: [govBaseLocation, destLocation],
-                addWaypoints: false, show: false,
-                lineOptions: { styles: [{color: routeColor, opacity: 0.8, weight: 6}] }
-            }).addTo(map);
-
-            activeRoutes[id] = { control: newRouteControl, marker: destMarker, destination: destinationStr, color: routeColor, distance: `${instantDistKm} km`, time: 'Calculating...' };
-            
-            newRouteControl.on('routesfound', function(e) {
-                 const route = e.routes[0];
-
-                const timeInMinutes = Math.round(route.summary.totalTime / 60);
-                 const distanceInKm = (route.summary.totalDistance / 1000).toFixed(1);
-
-                 activeRoutes[id].time = `${timeInMinutes} min`;
-                 activeRoutes[id].distance = `${distanceInKm} km`;
-
-                console.log(`Route to ${destinationStr}: ${distanceInKm} km, ${timeInMinutes} min`);
-            });
-            if (zoomToPath) {
-                newRouteControl.on('routesfound', function(e) {
-                    const bounds = L.latLngBounds(e.routes[0].coordinates);
-                    map.fitBounds(bounds);
-                 });
-            }map.flyTo(destLocation, 8);
-            rescueLegend.update();
->>>>>>> bcd9ef4d2960ec02077c7a569331341b6e30d5dc
         }
 
         // Remove old route for this id if exists
@@ -488,7 +451,7 @@ function getFilteredRequests() {
     return helpRequests.filter(req => {
         const matchStatus = !filterStatus || req.status === filterStatus;
         // ✅ treat missing urgency as 'high' (app default)
-        const reqUrgency = (req.urgency || 'high').toLowerCase();
+        const reqUrgency = (req.urgency || 'medium').toLowerCase();
         const matchUrgency = !filterUrgency ||
             reqUrgency === filterUrgency.toLowerCase(); const matchType = !filterType ||
                 (req.type && req.type.toLowerCase() === filterType.toLowerCase());
@@ -616,7 +579,7 @@ function renderHelpRequests(append = false) {
             <div class="sos-info-row">
                 <i class="fas fa-exclamation-circle" style="color:${urgencyColor};"></i>
                 <div><span class="sos-info-label">Urgency</span>
-                     <span class="sos-info-value" style="color:${urgencyColor};">${(req.urgency || 'high').toUpperCase()}</span></div>
+                     <span class="sos-info-value" style="color:${urgencyColor};">${(req.urgency || 'medium').toUpperCase()}</span></div>
             </div>
             <div class="sos-info-row full-width">
                 <i class="fas fa-map-marker-alt" style="color:#e74c3c;"></i>
