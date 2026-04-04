@@ -15,6 +15,10 @@ const PORT = process.env.PORT || 5000;
 const HOST_IP = process.env.HOST_IP || '192.168.1.16';
 const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 
+//Pothole Alert
+const PotholeAlert = require('./models/PotholeAlert');
+
+
 // middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -145,7 +149,7 @@ const GOVT_PRIORITY_BY_TYPE = {
 function getUrgencyFromType(type) {
   return GOVT_PRIORITY_BY_TYPE[type] || 'medium';
 }
-
+//Priority score is a combination of urgency, number of people affected, and how long it's been pending. Higher score means more urgent.
 function calculatePriorityScore(urgency, people, timestamp) {
   const urgencyPoints = { critical: 100, high: 70, medium: 40, low: 20 };
   let score = urgencyPoints[urgency] || 70;
@@ -283,6 +287,103 @@ if (fs.existsSync(reactDistPath)) {
     res.sendFile(path.join(reactDistPath, 'index.html'));
   });
 }
+
+app.post('/api/potholes', async (req, res) => {
+  try {
+    const {
+      city,
+      locality,
+      locationText,
+      latitude,
+      longitude,
+      alertRadiusMeters,
+      severity,
+      confidence,
+      source,
+      imageUrl,
+      notes,
+    } = req.body;
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    if (!city || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({
+        error: 'city, latitude and longitude are required',
+      });
+    }
+
+    const pothole = await new PotholeAlert({
+      city,
+      locality: locality || '',
+      locationText: locationText || `${city}${locality ? `, ${locality}` : ''}`,
+      latitude: lat,
+      longitude: lng,
+      coordinates: {
+        type: 'Point',
+        coordinates: [lng, lat],
+      },
+      alertRadiusMeters: Number(alertRadiusMeters || 500),
+      severity: severity || 'medium',
+      confidence: confidence ?? null,
+      source: source || 'manual',
+      imageUrl: imageUrl || '',
+      notes: notes || '',
+      status: 'active',
+    }).save();
+
+    res.status(201).json(pothole);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/potholes/nearby', async (req, res) => {
+  try {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    const radius = Number(req.query.radius || 500);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Valid lat and lng are required' });
+    }
+
+    const potholes = await PotholeAlert.find({
+      status: 'active',
+      coordinates: {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [lng, lat],
+          },
+          $maxDistance: radius,
+        },
+      },
+    }).limit(20);
+
+    res.json(potholes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/potholes/:id/status', async (req, res) => {
+  try {
+    const pothole = await PotholeAlert.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: req.body.status,
+        lastVerifiedAt: new Date(),
+      },
+      { new: true }
+    );
+
+    res.json(pothole);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // start
 app.listen(PORT, '0.0.0.0', () => {
