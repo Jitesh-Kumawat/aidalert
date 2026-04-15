@@ -1,1 +1,5 @@
 node_modules
+backend/.env
+**/__pycache__/
+*.py[cod]
+ml-priority-service/disaster_model/
