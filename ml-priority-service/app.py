@@ -11,7 +11,7 @@ MODEL_SOURCE = os.environ.get("MODEL_SOURCE", LOCAL_MODEL_DIR)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_SOURCE)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_SOURCE)
 
-label_map_path = os.path.join(LOCAL_MODEL_DIR, "label_map.json")
+label_map_path = os.path.join(MODEL_SOURCE, "label_map.json")
 
 if os.path.exists(label_map_path):
     with open(label_map_path, "r") as f:
