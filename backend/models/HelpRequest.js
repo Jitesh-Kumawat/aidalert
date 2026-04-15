@@ -39,6 +39,12 @@ const HelpRequestSchema = new mongoose.Schema({
   longitude: { type: Number, default: null },
   people: { type: Number, default: 1 },
   priorityScore: { type: Number, default: 0 },
+
+modelConfidence: { type: Number, default: null },
+prioritySource: { type: String, default: 'rule' },
 });
 
 module.exports = mongoose.model('HelpRequest', HelpRequestSchema);
+
+
+

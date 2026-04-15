@@ -18,6 +18,10 @@ const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 //Pothole Alert
 const PotholeAlert = require('./models/PotholeAlert');
 
+//ML service
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8001';
+
+
 
 // middleware
 app.use(cors({ origin: '*' }));
@@ -57,6 +61,49 @@ async function loadModel() {
   }
 }
 setTimeout(loadModel, 2000);
+
+//ML Model
+async function predictPriorityWithML({
+  message,
+  reqType,
+  peopleCount = 1,
+  vulnerablePresent = 'no',
+  waitingMinutes = 0,
+}) {
+  const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      req_type: reqType,
+      people_count: peopleCount,
+      vulnerable_present: vulnerablePresent,
+      waiting_minutes: waitingMinutes,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ML service failed: ${response.status}`);
+  }
+
+  return await response.json();
+}
+function hasCriticalKeywords(text = '') {
+  const t = text.toLowerCase();
+  const keywords = [
+    'unconscious',
+    'not breathing',
+    'bleeding',
+    'trapped',
+    'collapsed',
+    'building collapse',
+    'fire inside',
+    'drowning',
+    'heart attack',
+  ];
+
+  return keywords.some((word) => t.includes(word));
+}
 
 // AI pothole detect
 app.post('/api/pothole-detect', upload.single('image'), async (req, res) => {
@@ -248,9 +295,29 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
 app.post('/api/helprequests', async (req, res) => {
   try {
     const body = { ...req.body };
-    body.urgency = getUrgencyFromType(body.type);
     body.people = parseInt(body.people, 10) || 1;
-    body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+
+    const message = `${body.description || ''} ${body.location || ''}`.trim();
+
+    if (hasCriticalKeywords(message)) {
+      body.urgency = 'critical';
+      body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
+      body.prioritySource = 'rule';
+      body.modelConfidence = 1.0;
+    } else {
+      const ml = await predictPriorityWithML({
+        message,
+        reqType: body.type || '',
+        peopleCount: body.people || 1,
+        vulnerablePresent: 'no',
+        waitingMinutes: 0,
+      });
+
+      body.urgency = ml.priority;
+      body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+      body.prioritySource = 'ml';
+      body.modelConfidence = ml.confidence;
+    }
 
     const request = await new HelpRequest(body).save();
     res.status(201).json(request);
@@ -258,6 +325,7 @@ app.post('/api/helprequests', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
 
 app.patch('/api/helprequests/:id/status', async (req, res) => {
   try {
