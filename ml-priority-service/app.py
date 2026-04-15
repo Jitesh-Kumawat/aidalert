@@ -5,24 +5,20 @@ import torch
 import json
 import os
 
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "disaster_model")
-MODEL_SOURCE = os.getenv("MODEL_SOURCE", MODEL_DIR)
-
-if MODEL_SOURCE == MODEL_DIR and not os.path.exists(MODEL_SOURCE):
-    raise RuntimeError(
-        "Model weights are not present in ml-priority-service/disaster_model. "
-        "Place the exported model there or set MODEL_SOURCE to a local path or model repo ID."
-    )
+LOCAL_MODEL_DIR = os.path.join(os.path.dirname(__file__), "disaster_model")
+MODEL_SOURCE = os.environ.get("MODEL_SOURCE", LOCAL_MODEL_DIR)
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_SOURCE)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_SOURCE)
 
-label_map_path = os.path.join(MODEL_DIR, "label_map.json")
+label_map_path = os.path.join(LOCAL_MODEL_DIR, "label_map.json")
+
 if os.path.exists(label_map_path):
     with open(label_map_path, "r") as f:
         label_map = json.load(f)
     id2label = {int(k): v for k, v in label_map["id2label"].items()}
 else:
+    # fallback from model config
     id2label = {int(k): v for k, v in model.config.id2label.items()}
 
 app = FastAPI()
@@ -45,7 +41,7 @@ def build_input_text(data: PriorityRequest):
 
 @app.get("/")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "model_source": MODEL_SOURCE}
 
 @app.post("/predict")
 def predict_priority(data: PriorityRequest):
@@ -58,8 +54,9 @@ def predict_priority(data: PriorityRequest):
         padding=True,
         max_length=512
     )
-    # DistilBERT does not use token_type_ids
+
     inputs.pop("token_type_ids", None)
+
     model.eval()
     with torch.no_grad():
         outputs = model(**inputs)
