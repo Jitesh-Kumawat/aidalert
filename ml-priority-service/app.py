@@ -72,3 +72,6 @@ def predict_priority(data: PriorityRequest):
             id2label[i]: float(probs[i]) for i in range(len(probs))
         }
     }
+
+print("Loaded label_map from:", label_map_path)
+print("id2label mapping:", id2label)
