@@ -100,8 +100,8 @@ model = AutoModelForSequenceClassification.from_pretrained(MODEL_SOURCE)
 id2label = {
     0: "critical",
     1: "high",
-    2: "medium",
-    3: "low"
+    2: "low",
+    3: "medium"
 }
 
 print("Model loaded from:", MODEL_SOURCE)
