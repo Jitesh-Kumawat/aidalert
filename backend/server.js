@@ -77,24 +77,36 @@ async function predictPriorityWithML({
   peopleCount = 1,
   vulnerablePresent = 'no',
   waitingMinutes = 0,
-}) {
-  const response = await fetch(`${ML_SERVICE_URL}/predict`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      req_type: reqType,
-      people_count: peopleCount,
-      vulnerable_present: vulnerablePresent,
-      waiting_minutes: waitingMinutes,
-    }),
-  });
+}, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000); // 25s per attempt
 
-  if (!response.ok) {
-    throw new Error(`ML service failed: ${response.status}`);
+      const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          req_type: reqType,
+          people_count: peopleCount,
+          vulnerable_present: vulnerablePresent,
+          waiting_minutes: waitingMinutes,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) throw new Error(`ML service failed: ${response.status}`);
+      return await response.json();
+
+    } catch (err) {
+      console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, 5000)); // wait 5s before retry
+    }
   }
-
-  return await response.json();
 }
 function hasCriticalKeywords(text = '') {
   const t = text.toLowerCase();
