@@ -21,7 +21,15 @@ const PotholeAlert = require('./models/PotholeAlert');
 //ML service
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8001';
 
-
+// Keep ML service warm on Render free tier
+setInterval(async () => {
+  try {
+    await fetch(`${ML_SERVICE_URL}/`);
+    console.log('ML warm ping ok');
+  } catch (e) {
+    console.error('ML warm ping failed:', e.message);
+  }
+}, 10 * 60 * 1000);
 
 // middleware
 app.use(cors({ origin: '*' }));
@@ -277,7 +285,7 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
     const all = await HelpRequest.find({ status: 'pending' });
 
     for (const item of all) {
-      item.urgency = getUrgencyFromType(item.type);
+      // item.urgency = getUrgencyFromType(item.type);
       item.priorityScore = calculatePriorityScore(
         item.urgency,
         item.people,
