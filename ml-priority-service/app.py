@@ -90,6 +90,11 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import os
 
+# 1. FORCE PYTORCH TO USE 1 THREAD (Saves a massive amount of RAM)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+torch.set_num_threads(1)
+
 LOCAL_MODEL_DIR = os.path.join(os.path.dirname(__file__), "disaster_model")
 MODEL_SOURCE = os.environ.get("MODEL_SOURCE", LOCAL_MODEL_DIR)
 
@@ -138,8 +143,9 @@ def predict_priority(data: PriorityRequest):
         return_tensors="pt",
         truncation=True,
         padding=True,
-        max_length=512
+        max_length=64 # 2. LOWER MAX LENGTH (512 is overkill for short SOS messages and wastes RAM)
     )
+    
 
     inputs.pop("token_type_ids", None)
 
@@ -150,6 +156,10 @@ def predict_priority(data: PriorityRequest):
     probs = torch.softmax(outputs.logits, dim=-1)[0]
     pred_id = torch.argmax(probs).item()
     confidence = probs[pred_id].item()
+
+    # 3. FREE MEMORY IMMEDIATELY
+    del inputs
+    del outputs
 
     return {
         "priority": id2label[pred_id],
