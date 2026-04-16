@@ -30,8 +30,8 @@ const HelpRequestSchema = new mongoose.Schema({
     default: 'pending',
   },
   urgency: {
-    type: String,
-    enum: ['low', 'medium', 'high', 'critical'],
+   type: String,
+    enum: ['critical', 'high', 'medium', 'low'],
     default: 'medium',
   },
   timestamp: { type: Date, default: Date.now },
