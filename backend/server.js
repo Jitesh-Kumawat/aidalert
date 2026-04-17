@@ -169,6 +169,7 @@ setTimeout(loadModel, 2000);
 // ==========================================
 // 1. THE PERMANENT ML FIX (HUGGING FACE API)
 // ==========================================
+
 async function predictPriorityWithML({
   message,
   reqType,
@@ -178,29 +179,36 @@ async function predictPriorityWithML({
 }, retries = 3) {
   
   const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-priority-model';
-  const text = `Type: ${reqType}. People: ${peopleCount}. Vulnerable: ${vulnerablePresent}. WaitingMinutes: ${waitingMinutes}. Message: ${message}`;
+  
+  // FIX 1: Only send the raw message. Do not send "Type: Other. People: 1..." 
+  // because the model was not trained on that extra text!
+  const text = message;
 
-  // 1. Prepare the headers, explicitly adding the Hugging Face Token!
-  const headers = { 'Content-Type': 'application/json' };
+  // FIX 2: Add the 'User-Agent' so Cloudflare knows you aren't a spam bot
+  const headers = { 
+    'Content-Type': 'application/json',
+    'User-Agent': 'AidAlert-Backend/1.0' 
+  };
+  
   if (process.env.HF_API_KEY) {
-    headers['Authorization'] = `Bearer ${process.env.HF_API_KEY}`;
+    // .trim() prevents accidental invisible spaces from Render
+    headers['Authorization'] = `Bearer ${process.env.HF_API_KEY.trim()}`;
   } else {
-    console.warn("WARNING: No HF_API_KEY found in Environment Variables! API may block the request.");
+    console.warn("WARNING: No HF_API_KEY found in Environment Variables!");
   }
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await fetch(modelUrl, {
         method: 'POST',
-        headers: headers, // Send the token here
-        body: JSON.stringify({ inputs: text }),
+        headers: headers,
+        body: JSON.stringify({ inputs: text }), // Sending the clean text
       });
 
-      // 2. Catch HTML Cloudflare blocks before they crash the JSON parser
+      // Catch HTML Cloudflare blocks
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-        const textResponse = await response.text();
-        throw new Error(`Hugging Face blocked the request (Returned HTML). Make sure HF_API_KEY is correct.`);
+        throw new Error(`Hugging Face blocked the request (Returned HTML). Make sure User-Agent and Token are set.`);
       }
 
       const data = await response.json();
@@ -227,7 +235,7 @@ async function predictPriorityWithML({
     } catch (err) {
       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
       
-      // Fall back to the default dropdown priority.
+      // Safety net fallback
       if (attempt === retries) {
         console.log("Falling back to dropdown default due to ML failure.");
         return { priority: getUrgencyFromType(reqType), confidence: 0.5 };
