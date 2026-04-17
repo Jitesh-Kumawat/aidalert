@@ -71,6 +71,47 @@ async function loadModel() {
 setTimeout(loadModel, 2000);
 
 //ML Model
+// async function predictPriorityWithML({
+//   message,
+//   reqType,
+//   peopleCount = 1,
+//   vulnerablePresent = 'no',
+//   waitingMinutes = 0,
+// }, retries = 3) {
+//   for (let attempt = 1; attempt <= retries; attempt++) {
+//     try {
+//       const controller = new AbortController();
+//       const timeout = setTimeout(() => controller.abort(), 25000); // 25s per attempt
+
+//       const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({
+//           message,
+//           req_type: reqType,
+//           people_count: peopleCount,
+//           vulnerable_present: vulnerablePresent,
+//           waiting_minutes: waitingMinutes,
+//         }),
+//         signal: controller.signal,
+//       });
+
+//       clearTimeout(timeout);
+
+//       if (!response.ok) throw new Error(`ML service failed: ${response.status}`);
+//       return await response.json();
+
+//     } catch (err) {
+//       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
+//       if (attempt === retries) throw err;
+//       await new Promise(r => setTimeout(r, 5000)); // wait 5s before retry
+//     }
+//   }
+// }
+
+// ==========================================
+// 1. THE PERMANENT ML FIX (HUGGING FACE API)
+// ==========================================
 async function predictPriorityWithML({
   message,
   reqType,
@@ -78,33 +119,49 @@ async function predictPriorityWithML({
   vulnerablePresent = 'no',
   waitingMinutes = 0,
 }, retries = 3) {
+  // Directly call your public model on Hugging Face. No Render Python server needed!
+  const modelUrl = 'https://huggingface.co/jitubnna/aidalert-priority-model';
+  const text = `Type: ${reqType}. People: ${peopleCount}. Vulnerable: ${vulnerablePresent}. WaitingMinutes: ${waitingMinutes}. Message: ${message}`;
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25000); // 25s per attempt
-
-      const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+      const response = await fetch(modelUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          req_type: reqType,
-          people_count: peopleCount,
-          vulnerable_present: vulnerablePresent,
-          waiting_minutes: waitingMinutes,
-        }),
-        signal: controller.signal,
+        body: JSON.stringify({ inputs: text }),
       });
 
-      clearTimeout(timeout);
+      const data = await response.json();
 
-      if (!response.ok) throw new Error(`ML service failed: ${response.status}`);
-      return await response.json();
+      // If HF model is waking up, wait and retry
+      if (response.status === 503 && data.estimated_time) {
+        console.log(`Model waking up, waiting ${data.estimated_time}s...`);
+        await new Promise(r => setTimeout(r, (data.estimated_time * 1000) + 2000));
+        continue;
+      }
+
+      if (!response.ok) throw new Error(`API failed: ${JSON.stringify(data)}`);
+
+      // Extract highest confidence prediction
+      const predictions = data[0]; 
+      predictions.sort((a, b) => b.score - a.score);
+      let topLabel = predictions[0].label;
+
+      const labelMap = { "LABEL_0": "critical", "LABEL_1": "high", "LABEL_2": "low", "LABEL_3": "medium" };
+      if (labelMap[topLabel]) topLabel = labelMap[topLabel];
+
+      return { priority: topLabel, confidence: predictions[0].score };
 
     } catch (err) {
       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
-      if (attempt === retries) throw err;
-      await new Promise(r => setTimeout(r, 5000)); // wait 5s before retry
+      
+      // THE ULTIMATE FAILSAFE: If Hugging Face is completely down, never crash the app. 
+      // Fall back to the default dropdown priority.
+      if (attempt === retries) {
+        console.log("Falling back to dropdown default due to ML failure.");
+        return { priority: getUrgencyFromType(reqType), confidence: 0.5 };
+      }
+      await new Promise(r => setTimeout(r, 5000));
     }
   }
 }
@@ -312,18 +369,70 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
   }
 });
 
+// app.post('/api/helprequests', async (req, res) => {
+//   try {
+//     const body = { ...req.body };
+//     body.people = parseInt(body.people, 10) || 1;
+
+//     const message = `${body.description || ''} ${body.location || ''}`.trim();
+
+//     if (hasCriticalKeywords(message)) {
+//       body.urgency = 'critical';
+//       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
+//       body.prioritySource = 'rule';
+//       body.modelConfidence = 1.0;
+//     } else {
+//       const ml = await predictPriorityWithML({
+//         message,
+//         reqType: body.type || '',
+//         peopleCount: body.people || 1,
+//         vulnerablePresent: 'no',
+//         waitingMinutes: 0,
+//       });
+
+//       body.urgency = ml.priority;
+//       body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+//       body.prioritySource = 'ml';
+//       body.modelConfidence = ml.confidence;
+//     }
+
+//     const request = await new HelpRequest(body).save();
+//     res.status(201).json(request);
+//   } catch (err) {
+//     res.status(400).json({ error: err.message });
+//   }
+// });
+
+// ==========================================
+// 2. THE PERMANENT ROUTING FIX
+// ==========================================
+
 app.post('/api/helprequests', async (req, res) => {
   try {
     const body = { ...req.body };
     body.people = parseInt(body.people, 10) || 1;
 
-    const message = `${body.description || ''} ${body.location || ''}`.trim();
+    // Isolate the description text
+    const descriptionText = (body.description || '').trim();
+    const message = `${descriptionText} ${body.location || ''}`.trim();
 
+    // SCENARIO A: Critical Keywords Found -> Instant Save, No ML
     if (hasCriticalKeywords(message)) {
       body.urgency = 'critical';
       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
       body.prioritySource = 'rule';
       body.modelConfidence = 1.0;
+      
+    // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
+    // (This fixes the crash when a user just selects "Rescue" and hits send)
+    } else if (descriptionText === '') {
+      body.urgency = getUrgencyFromType(body.type); 
+      body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+      body.prioritySource = 'dropdown_default';
+      body.modelConfidence = 1.0;
+      
+    // SCENARIO C: Custom Text (e.g., "fan not working") -> Send to Hugging Face API
+    // (This fixes the OOM crash because HF handles the memory, not Render)
     } else {
       const ml = await predictPriorityWithML({
         message,
@@ -342,10 +451,10 @@ app.post('/api/helprequests', async (req, res) => {
     const request = await new HelpRequest(body).save();
     res.status(201).json(request);
   } catch (err) {
+    console.error("SOS Creation Error Details:", err);
     res.status(400).json({ error: err.message });
   }
 });
-
 
 app.patch('/api/helprequests/:id/status', async (req, res) => {
   try {
