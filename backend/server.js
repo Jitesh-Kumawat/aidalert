@@ -112,6 +112,63 @@ setTimeout(loadModel, 2000);
 // ==========================================
 // 1. THE PERMANENT ML FIX (HUGGING FACE API)
 // ==========================================
+// async function predictPriorityWithML({
+//   message,
+//   reqType,
+//   peopleCount = 1,
+//   vulnerablePresent = 'no',
+//   waitingMinutes = 0,
+// }, retries = 3) {
+//   // Directly call your public model on Hugging Face. No Render Python server needed!
+// const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-priority-model';
+//   const text = `Type: ${reqType}. People: ${peopleCount}. Vulnerable: ${vulnerablePresent}. WaitingMinutes: ${waitingMinutes}. Message: ${message}`;
+
+//   for (let attempt = 1; attempt <= retries; attempt++) {
+//     try {
+//       const response = await fetch(modelUrl, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ inputs: text }),
+//       });
+
+//       const data = await response.json();
+
+//       // If HF model is waking up, wait and retry
+//       if (response.status === 503 && data.estimated_time) {
+//         console.log(`Model waking up, waiting ${data.estimated_time}s...`);
+//         await new Promise(r => setTimeout(r, (data.estimated_time * 1000) + 2000));
+//         continue;
+//       }
+
+//       if (!response.ok) throw new Error(`API failed: ${JSON.stringify(data)}`);
+
+//       // Extract highest confidence prediction
+//       const predictions = data[0]; 
+//       predictions.sort((a, b) => b.score - a.score);
+//       let topLabel = predictions[0].label;
+
+//       const labelMap = { "LABEL_0": "critical", "LABEL_1": "high", "LABEL_2": "low", "LABEL_3": "medium" };
+//       if (labelMap[topLabel]) topLabel = labelMap[topLabel];
+
+//       return { priority: topLabel, confidence: predictions[0].score };
+
+//     } catch (err) {
+//       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
+      
+//       // THE ULTIMATE FAILSAFE: If Hugging Face is completely down, never crash the app. 
+//       // Fall back to the default dropdown priority.
+//       if (attempt === retries) {
+//         console.log("Falling back to dropdown default due to ML failure.");
+//         return { priority: getUrgencyFromType(reqType), confidence: 0.5 };
+//       }
+//       await new Promise(r => setTimeout(r, 5000));
+//     }
+//   }
+// }
+
+// ==========================================
+// 1. THE PERMANENT ML FIX (HUGGING FACE API)
+// ==========================================
 async function predictPriorityWithML({
   message,
   reqType,
@@ -119,17 +176,32 @@ async function predictPriorityWithML({
   vulnerablePresent = 'no',
   waitingMinutes = 0,
 }, retries = 3) {
-  // Directly call your public model on Hugging Face. No Render Python server needed!
-const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-priority-model';
+  
+  const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-priority-model';
   const text = `Type: ${reqType}. People: ${peopleCount}. Vulnerable: ${vulnerablePresent}. WaitingMinutes: ${waitingMinutes}. Message: ${message}`;
+
+  // 1. Prepare the headers, explicitly adding the Hugging Face Token!
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.HF_API_KEY) {
+    headers['Authorization'] = `Bearer ${process.env.HF_API_KEY}`;
+  } else {
+    console.warn("WARNING: No HF_API_KEY found in Environment Variables! API may block the request.");
+  }
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await fetch(modelUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers, // Send the token here
         body: JSON.stringify({ inputs: text }),
       });
+
+      // 2. Catch HTML Cloudflare blocks before they crash the JSON parser
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+        const textResponse = await response.text();
+        throw new Error(`Hugging Face blocked the request (Returned HTML). Make sure HF_API_KEY is correct.`);
+      }
 
       const data = await response.json();
 
@@ -155,7 +227,6 @@ const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-
     } catch (err) {
       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
       
-      // THE ULTIMATE FAILSAFE: If Hugging Face is completely down, never crash the app. 
       // Fall back to the default dropdown priority.
       if (attempt === retries) {
         console.log("Falling back to dropdown default due to ML failure.");
