@@ -7,6 +7,11 @@ const path = require('path');
 const multer = require('multer');
 const Jimp = require('jimp');
 const tf = require('@tensorflow/tfjs');
+
+// NEW: Add the official Hugging Face SDK
+const { HfInference } = require('@huggingface/inference');
+const hf = new HfInference(process.env.HF_API_KEY);
+
 const Alert = require('./models/Alert');
 const HelpRequest = require('./models/HelpRequest');
 
@@ -168,93 +173,63 @@ setTimeout(loadModel, 2000);
 
 
 
-// ==========================================
-// 1. THE PERMANENT ML FIX (HUGGING FACE API)
-// ==========================================
-async function predictPriorityWithML({
-  message,
-  reqType,
-  peopleCount = 1,
-  vulnerablePresent = 'no',
-  waitingMinutes = 0,
-}, retries = 3) {
-  
-  const modelUrl = 'https://api-inference.huggingface.co/models/jitubnna/aidalert-priority-model';
-  
-  // Clean text so the model understands it perfectly
-  const text = message;
 
-  // STEALTH MODE: Disguise the Render server as a normal Google Chrome browser
-  // so Cloudflare's security firewall lets the request pass through.
-  const headers = { 
-    'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  };
-  
-  if (process.env.HF_API_KEY) {
-    headers['Authorization'] = `Bearer ${process.env.HF_API_KEY.trim()}`;
-  } else {
-    console.warn("WARNING: No HF_API_KEY found in Environment Variables!");
+// ==========================================
+// 1. THE PERMANENT ML FIX (OFFICIAL HF SDK)
+// ==========================================
+async function predictPriorityWithML(cleanMessageText, retries = 3) {
+  if (!process.env.HF_API_KEY) {
+    console.warn("WARNING: No HF_API_KEY found! Model cannot run.");
+    return null; // Will trigger the safety fallback
   }
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(modelUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ inputs: text }),
+      // The official SDK handles the Cloudflare bypass automatically
+      const response = await hf.textClassification({
+        model: 'jitubnna/aidalert-priority-model',
+        inputs: cleanMessageText // We only send the raw text!
       });
 
-      // Catch HTML Cloudflare blocks
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        throw new Error(`Hugging Face blocked the request (Returned HTML). Make sure User-Agent and Token are set.`);
-      }
+      // Sort to get the highest confidence label
+      response.sort((a, b) => b.score - a.score);
+      let topLabel = response[0].label;
 
-      const data = await response.json();
-
-      // If HF model is waking up, wait and retry
-      if (response.status === 503 && data.estimated_time) {
-        console.log(`Model waking up, waiting ${data.estimated_time}s...`);
-        await new Promise(r => setTimeout(r, (data.estimated_time * 1000) + 2000));
-        continue;
-      }
-
-      if (!response.ok) throw new Error(`API failed: ${JSON.stringify(data)}`);
-
-      // Extract highest confidence prediction
-      const predictions = data[0]; 
-      predictions.sort((a, b) => b.score - a.score);
-      let topLabel = predictions[0].label;
-
+      // Translate LABEL_X to your actual text
       const labelMap = { "LABEL_0": "critical", "LABEL_1": "high", "LABEL_2": "low", "LABEL_3": "medium" };
       if (labelMap[topLabel]) topLabel = labelMap[topLabel];
 
-      return { priority: topLabel, confidence: predictions[0].score };
+      return { priority: topLabel, confidence: response[0].score };
 
     } catch (err) {
       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
-      
-      if (attempt === retries) {
-        console.log("Falling back to dropdown default due to ML failure.");
-        return { priority: getUrgencyFromType(reqType), confidence: 0.5 };
-      }
-      await new Promise(r => setTimeout(r, 5000));
+      if (attempt === retries) return null; // Trigger fallback after 3 fails
+      await new Promise(r => setTimeout(r, 5000)); // Wait 5s before retry
     }
   }
 }
+// function hasCriticalKeywords(text = '') {
+//   const t = text.toLowerCase();
+//   const keywords = [
+//     'unconscious',
+//     'not breathing',
+//     'bleeding',
+//     'trapped',
+//     'collapsed',
+//     'building collapse',
+//     'fire inside',
+//     'drowning',
+//     'heart attack',
+//   ];
+
+//   return keywords.some((word) => t.includes(word));
+// }
 function hasCriticalKeywords(text = '') {
   const t = text.toLowerCase();
+  // We expanded this list to catch more critical emergencies instantly
   const keywords = [
-    'unconscious',
-    'not breathing',
-    'bleeding',
-    'trapped',
-    'collapsed',
-    'building collapse',
-    'fire inside',
-    'drowning',
-    'heart attack',
+    'unconscious', 'not breathing', 'bleeding', 'trapped', 'collapsed',
+    'collapse', 'fire', 'drowning', 'heart attack', 'gas leak', 'hanging', 'explosion'
   ];
 
   return keywords.some((word) => t.includes(word));
@@ -481,10 +456,10 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
 //   }
 // });
 
+
 // ==========================================
 // 2. THE PERMANENT ROUTING FIX
 // ==========================================
-
 app.post('/api/helprequests', async (req, res) => {
   try {
     const body = { ...req.body };
@@ -492,38 +467,42 @@ app.post('/api/helprequests', async (req, res) => {
 
     // Isolate the description text
     const descriptionText = (body.description || '').trim();
-    const message = `${descriptionText} ${body.location || ''}`.trim();
+    // Message with location is only used for the keyword search
+    const messageWithLocation = `${descriptionText} ${body.location || ''}`.trim();
 
     // SCENARIO A: Critical Keywords Found -> Instant Save, No ML
-    if (hasCriticalKeywords(message)) {
+    if (hasCriticalKeywords(messageWithLocation)) {
       body.urgency = 'critical';
       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
       body.prioritySource = 'rule';
       body.modelConfidence = 1.0;
       
     // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
-    // (This fixes the crash when a user just selects "Rescue" and hits send)
     } else if (descriptionText === '') {
       body.urgency = getUrgencyFromType(body.type); 
       body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
       body.prioritySource = 'dropdown_default';
       body.modelConfidence = 1.0;
       
-    // SCENARIO C: Custom Text (e.g., "fan not working") -> Send to Hugging Face API
-    // (This fixes the OOM crash because HF handles the memory, not Render)
+    // SCENARIO C: Custom Text -> Send ONLY the text to Hugging Face
     } else {
-      const ml = await predictPriorityWithML({
-        message,
-        reqType: body.type || '',
-        peopleCount: body.people || 1,
-        vulnerablePresent: 'no',
-        waitingMinutes: 0,
-      });
+      // FIX: We ONLY send the descriptionText to the AI.
+      // If we send GPS coordinates or "Type: Other", it confuses the AI.
+      const ml = await predictPriorityWithML(descriptionText);
 
-      body.urgency = ml.priority;
-      body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
-      body.prioritySource = 'ml';
-      body.modelConfidence = ml.confidence;
+      if (ml) {
+        // ML succeeded!
+        body.urgency = ml.priority;
+        body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+        body.prioritySource = 'ml';
+        body.modelConfidence = ml.confidence;
+      } else {
+        // ML completely failed (Network down, etc). Use safety fallback.
+        body.urgency = getUrgencyFromType(body.type);
+        body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+        body.prioritySource = 'ml_fallback';
+        body.modelConfidence = 0.5;
+      }
     }
 
     const request = await new HelpRequest(body).save();
