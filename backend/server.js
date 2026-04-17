@@ -188,7 +188,8 @@ async function predictPriorityWithML(cleanMessageText, retries = 3) {
       // The official SDK handles the Cloudflare bypass automatically
       const response = await hf.textClassification({
         model: 'jitubnna/aidalert-priority-model',
-        inputs: cleanMessageText // We only send the raw text!
+        inputs: cleanMessageText, // We only send the raw text!
+        provider: 'hf-inference'  
       });
 
       // Sort to get the highest confidence label
