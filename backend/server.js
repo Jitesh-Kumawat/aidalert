@@ -705,7 +705,15 @@ async function loadModel() {
   }
 }
 setTimeout(loadModel, 2000);
-
+// Keep ML service warm
+setInterval(async () => {
+  try {
+    await fetch(`${process.env.ML_SERVICE_URL || 'https://aidalert-ml.onrender.com'}/`);
+    console.log('ML warm ping ok');
+  } catch (e) {
+    console.error('ML ping failed:', e.message);
+  }
+}, 10 * 60 * 1000);
 // ==========================================
 // 1. THE PERMANENT ML FIX (YOUR PYTHON API + SMART WAKE-UP)
 // ==========================================
