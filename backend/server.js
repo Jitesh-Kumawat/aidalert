@@ -667,6 +667,24 @@ const PORT = process.env.PORT || 5000;
 const HOST_IP = process.env.HOST_IP || '192.168.1.16';
 const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 
+// New Jimp v1 way to get pixel data
+const width = resized.width;
+const height = resized.height;
+const values = new Float32Array(width * height * 3);
+
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    const pixel = resized.getPixelColor(x, y);
+    const r = (pixel >>> 24) & 0xff;
+    const g = (pixel >>> 16) & 0xff;
+    const b = (pixel >>> 8)  & 0xff;
+    const idx = (y * width + x) * 3;
+    values[idx]     = r / 255.0;
+    values[idx + 1] = g / 255.0;
+    values[idx + 2] = b / 255.0;
+  }
+}
+
 // middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json());
