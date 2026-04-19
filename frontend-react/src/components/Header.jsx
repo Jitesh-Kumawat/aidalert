@@ -1,6 +1,7 @@
 const navItems = [
   { id: 'dashboard', icon: 'fas fa-tachometer-alt', label: 'Dashboard' },
   { id: 'alerts', icon: 'fas fa-exclamation-triangle', label: 'Alerts' },
+  { id: 'incidents', icon: 'fas fa-map-marker-alt', label: 'Incidents' },
   { id: 'resources', icon: 'fas fa-truck', label: 'Resources' },
   { id: 'reports', icon: 'fas fa-bell', label: 'Emergency Help' },
 ];
