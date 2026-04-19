@@ -159,7 +159,7 @@
 
 // //     } catch (err) {
 // //       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
-      
+
 // //       // THE ULTIMATE FAILSAFE: If Hugging Face is completely down, never crash the app. 
 // //       // Fall back to the default dropdown priority.
 // //       if (attempt === retries) {
@@ -477,14 +477,14 @@
 //       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
 //       body.prioritySource = 'rule';
 //       body.modelConfidence = 1.0;
-      
+
 //     // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
 //     } else if (descriptionText === '') {
 //       body.urgency = getUrgencyFromType(body.type); 
 //       body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
 //       body.prioritySource = 'dropdown_default';
 //       body.modelConfidence = 1.0;
-      
+
 //     // SCENARIO C: Custom Text -> Send ONLY the text to Hugging Face
 //     } else {
 //       // FIX: We ONLY send the descriptionText to the AI.
@@ -655,7 +655,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const {Jimp }= require('jimp');
+const { Jimp } = require('jimp');
 const tf = require('@tensorflow/tfjs');
 
 const Alert = require('./models/Alert');
@@ -667,23 +667,7 @@ const PORT = process.env.PORT || 5000;
 const HOST_IP = process.env.HOST_IP || '192.168.1.16';
 const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 
-// New Jimp v1 way to get pixel data
-const width = resized.width;
-const height = resized.height;
-const values = new Float32Array(width * height * 3);
 
-for (let y = 0; y < height; y++) {
-  for (let x = 0; x < width; x++) {
-    const pixel = resized.getPixelColor(x, y);
-    const r = (pixel >>> 24) & 0xff;
-    const g = (pixel >>> 16) & 0xff;
-    const b = (pixel >>> 8)  & 0xff;
-    const idx = (y * width + x) * 3;
-    values[idx]     = r / 255.0;
-    values[idx + 1] = g / 255.0;
-    values[idx + 2] = b / 255.0;
-  }
-}
 
 // middleware
 app.use(cors({ origin: '*' }));
@@ -745,7 +729,7 @@ async function predictPriorityWithML(cleanMessageText, retries = 3) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: cleanMessageText, // Only send the raw text!
-          req_type: "Other", 
+          req_type: "Other",
           people_count: 1,
           vulnerable_present: "no",
           waiting_minutes: 0
@@ -760,7 +744,7 @@ async function predictPriorityWithML(cleanMessageText, retries = 3) {
       if (!response.ok) throw new Error(`Python API failed: ${response.status}`);
 
       const data = await response.json();
-      
+
       // Safety check in case Python returns empty data
       if (!data || !data.priority) throw new Error("Invalid response from Python API");
 
@@ -768,12 +752,12 @@ async function predictPriorityWithML(cleanMessageText, retries = 3) {
 
     } catch (err) {
       console.error(`ML attempt ${attempt}/${retries} failed:`, err.message);
-      
+
       if (attempt === retries) return null; // Trigger fallback after 3 fails
-      
+
       // THE FIX: Wait 10 full seconds to give Python time to boot up!
       console.log("Waiting 10 seconds for Python server to wake up...");
-      await new Promise(r => setTimeout(r, 10000)); 
+      await new Promise(r => setTimeout(r, 10000));
     }
   }
 }
@@ -856,16 +840,26 @@ app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
     }
 
     // Process Image with AI Model
+    // inside the route:
     const image = await Jimp.read(req.file.path);
-    image.resize({ w: 224, h: 224 });
+    const resized = image.resize({ w: 224, h: 224 });
 
-    const { data, width, height } = image.bitmap;
+    // New Jimp v1 way to get pixel data
+    const width = resized.width;
+    const height = resized.height;
     const values = new Float32Array(width * height * 3);
 
-    for (let i = 0; i < width * height; i++) {
-      values[i * 3] = data[i * 4] / 255.0;
-      values[i * 3 + 1] = data[i * 4 + 1] / 255.0;
-      values[i * 3 + 2] = data[i * 4 + 2] / 255.0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const pixel = resized.getPixelColor(x, y);
+        const r = (pixel >>> 24) & 0xff;
+        const g = (pixel >>> 16) & 0xff;
+        const b = (pixel >>> 8) & 0xff;
+        const idx = (y * width + x) * 3;
+        values[idx] = r / 255.0;
+        values[idx + 1] = g / 255.0;
+        values[idx + 2] = b / 255.0;
+      }
     }
 
     const tensor = tf.tensor3d(values, [224, 224, 3]).expandDims(0);
@@ -1065,15 +1059,15 @@ app.post('/api/helprequests', async (req, res) => {
       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
       body.prioritySource = 'rule';
       body.modelConfidence = 1.0;
-      
-    // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
+
+      // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
     } else if (descriptionText === '') {
-      body.urgency = getUrgencyFromType(body.type); 
+      body.urgency = getUrgencyFromType(body.type);
       body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
       body.prioritySource = 'dropdown_default';
       body.modelConfidence = 1.0;
-      
-    // SCENARIO C: Custom Text -> Send ONLY the text to Python
+
+      // SCENARIO C: Custom Text -> Send ONLY the text to Python
     } else {
       const ml = await predictPriorityWithML(descriptionText);
 
