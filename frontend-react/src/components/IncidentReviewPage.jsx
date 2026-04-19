@@ -289,7 +289,7 @@ function formatDate(value) {
 export default function IncidentReviewPage() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all');
+const [statusFilter, setStatusFilter] = useState('unverified');
   const [busyId, setBusyId] = useState(null);
 
   async function loadIncidents() {

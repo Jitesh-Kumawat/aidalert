@@ -983,6 +983,11 @@ app.get('/api/incidents/nearby', async (req, res) => {
 app.patch('/api/incidents/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid incident id' });
+    }
+
     const update = { status };
 
     if (status === 'verified' || status === 'active') {
@@ -995,25 +1000,41 @@ app.patch('/api/incidents/:id/status', async (req, res) => {
       { new: true }
     );
 
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
     res.json(incident);
   } catch (err) {
+    console.error('Incident status update error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+
 app.patch('/api/incidents/:id/verify', async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid incident id' });
+    }
+
     const incident = await Incident.findByIdAndUpdate(
       req.params.id,
       { status: 'active', verifiedAt: new Date() },
       { new: true }
     );
 
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
     res.json(incident);
   } catch (err) {
+    console.error('Incident verify error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // start
 app.listen(PORT, '0.0.0.0', () => {
