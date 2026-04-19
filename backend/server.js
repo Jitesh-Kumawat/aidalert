@@ -650,6 +650,182 @@ app.patch('/api/potholes/:id/status', async (req, res) => {
   }
 });
 //incident API with image upload and AI processing
+// app.post('/api/incidents/report', upload.single('image'), async (req, res) => {
+//   try {
+//     const {
+//       hazardType = 'pothole',
+//       latitude,
+//       longitude,
+//       city,
+//       locationText,
+//       notes,
+//     } = req.body;
+
+//     const lat = Number(latitude);
+//     const lng = Number(longitude);
+
+//     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+//       return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+//     }
+
+//     const config = getIncidentConfig(hazardType);
+//     const resolvedLocation =
+//       locationText?.trim() || city?.trim() || 'Citizen reported hazard';
+
+//     const imageUrl = req.file
+//       ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
+//       : '';
+
+//     const incident = await new Incident({
+//       title: config.title,
+//       type: hazardType,
+//       description: notes?.trim() || `${config.title} reported by citizen`,
+//       locationText: resolvedLocation,
+//       latitude: lat,
+//       longitude: lng,
+//       coordinates: {
+//         type: 'Point',
+//         coordinates: [lng, lat],
+//       },
+//       severity: config.severity,
+//       alertRadiusMeters: config.alertRadiusMeters,
+//       status: 'unverified',
+//       source: 'citizen',
+//       confidence: null,
+//       imageUrl,
+//       notes: notes?.trim() || '',
+//       reportedBy: 'citizen',
+//     }).save();
+
+//     res.status(201).json({
+//       message: 'Report submitted for government verification',
+//       incident,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// app.post('/api/incidents', async (req, res) => {
+//   try {
+//     const {
+//       type,
+//       title,
+//       description,
+//       locationText,
+//       latitude,
+//       longitude,
+//       severity,
+//       alertRadiusMeters,
+//       source,
+//       confidence,
+//       notes,
+//     } = req.body;
+
+//     const lat = Number(latitude);
+//     const lng = Number(longitude);
+
+//     if (!type || !locationText || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+//       return res.status(400).json({
+//         error: 'type, locationText, latitude and longitude are required',
+//       });
+//     }
+
+//     const config = getIncidentConfig(type);
+
+//     const incident = await new Incident({
+//       title: title || config.title,
+//       type,
+//       description: description || '',
+//       locationText,
+//       latitude: lat,
+//       longitude: lng,
+//       coordinates: {
+//         type: 'Point',
+//         coordinates: [lng, lat],
+//       },
+//       severity: severity || config.severity,
+//       alertRadiusMeters: Number(alertRadiusMeters || config.alertRadiusMeters),
+//       status: 'active',
+//       source: source || 'govt',
+//       confidence: confidence ?? null,
+//       notes: notes || '',
+//       verifiedAt: new Date(),
+//       reportedBy: 'govt',
+//     }).save();
+
+//     res.status(201).json(incident);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// app.get('/api/incidents', async (req, res) => {
+//   try {
+//     const { status, type, source } = req.query;
+//     const filter = {};
+
+//     if (status) filter.status = status;
+//     if (type) filter.type = type;
+//     if (source) filter.source = source;
+
+//     const incidents = await Incident.find(filter).sort({ createdAt: -1 });
+//     res.json(incidents);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// app.get('/api/incidents/nearby', async (req, res) => {
+//   try {
+//     const lat = Number(req.query.lat);
+//     const lng = Number(req.query.lng);
+//     const radius = Number(req.query.radius || 500);
+
+//     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+//       return res.status(400).json({ error: 'Valid lat and lng are required' });
+//     }
+
+//     const incidents = await Incident.find({
+//       status: 'active',
+//       coordinates: {
+//         $near: {
+//           $geometry: {
+//             type: 'Point',
+//             coordinates: [lng, lat],
+//           },
+//           $maxDistance: radius,
+//         },
+//       },
+//     }).limit(25);
+
+//     res.json(incidents);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// app.patch('/api/incidents/:id/status', async (req, res) => {
+//   try {
+//     const { status } = req.body;
+//     const update = { status };
+
+//     if (status === 'verified' || status === 'active') {
+//       update.verifiedAt = new Date();
+//     }
+
+//     const incident = await Incident.findByIdAndUpdate(
+//       req.params.id,
+//       update,
+//       { new: true }
+//     );
+
+//     res.json(incident);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
 app.post('/api/incidents/report', upload.single('image'), async (req, res) => {
   try {
     const {
@@ -677,9 +853,13 @@ app.post('/api/incidents/report', upload.single('image'), async (req, res) => {
       : '';
 
     const incident = await new Incident({
-      title: config.title,
       type: hazardType,
+      title: config.title,
       description: notes?.trim() || `${config.title} reported by citizen`,
+      severity: config.severity,
+      status: 'unverified',
+      source: 'citizen',
+      confidence: null,
       locationText: resolvedLocation,
       latitude: lat,
       longitude: lng,
@@ -687,14 +867,10 @@ app.post('/api/incidents/report', upload.single('image'), async (req, res) => {
         type: 'Point',
         coordinates: [lng, lat],
       },
-      severity: config.severity,
       alertRadiusMeters: config.alertRadiusMeters,
-      status: 'unverified',
-      source: 'citizen',
-      confidence: null,
       imageUrl,
-      notes: notes?.trim() || '',
       reportedBy: 'citizen',
+      notes: notes?.trim() || '',
     }).save();
 
     res.status(201).json({
@@ -734,9 +910,13 @@ app.post('/api/incidents', async (req, res) => {
     const config = getIncidentConfig(type);
 
     const incident = await new Incident({
-      title: title || config.title,
       type,
+      title: title || config.title,
       description: description || '',
+      severity: severity || config.severity,
+      status: 'active',
+      source: source || 'govt',
+      confidence: confidence ?? null,
       locationText,
       latitude: lat,
       longitude: lng,
@@ -744,14 +924,10 @@ app.post('/api/incidents', async (req, res) => {
         type: 'Point',
         coordinates: [lng, lat],
       },
-      severity: severity || config.severity,
       alertRadiusMeters: Number(alertRadiusMeters || config.alertRadiusMeters),
-      status: 'active',
-      source: source || 'govt',
-      confidence: confidence ?? null,
-      notes: notes || '',
       verifiedAt: new Date(),
       reportedBy: 'govt',
+      notes: notes || '',
     }).save();
 
     res.status(201).json(incident);
@@ -764,7 +940,6 @@ app.get('/api/incidents', async (req, res) => {
   try {
     const { status, type, source } = req.query;
     const filter = {};
-
     if (status) filter.status = status;
     if (type) filter.type = type;
     if (source) filter.source = source;
@@ -817,6 +992,20 @@ app.patch('/api/incidents/:id/status', async (req, res) => {
     const incident = await Incident.findByIdAndUpdate(
       req.params.id,
       update,
+      { new: true }
+    );
+
+    res.json(incident);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/incidents/:id/verify', async (req, res) => {
+  try {
+    const incident = await Incident.findByIdAndUpdate(
+      req.params.id,
+      { status: 'active', verifiedAt: new Date() },
       { new: true }
     );
 
