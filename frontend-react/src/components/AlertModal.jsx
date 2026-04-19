@@ -153,9 +153,10 @@ export default function AlertModal({ open, onClose, onCreated }) {
     description: '',
   });
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [aiScanning, setAiScanning] = useState(false);
-  const [aiStatus, setAiStatus] = useState('');
+  // const [selectedFile, setSelectedFile] = useState(null);
+  // const [aiScanning, setAiScanning] = useState(false);
+  // const [aiStatus, setAiStatus] = useState('');
+  // const [saving, setSaving] = useState(false);
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;
@@ -165,58 +166,58 @@ export default function AlertModal({ open, onClose, onCreated }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleFileChange(e) {
-    const file = e.target.files?.[0] || null;
-    setSelectedFile(file);
-  }
+  // function handleFileChange(e) {
+  //   const file = e.target.files?.[0] || null;
+  //   setSelectedFile(file);
+  // }
 
-  async function runAiScan() {
-    if (!selectedFile) {
-      toast.warning('Please select an image first');
-      return;
-    }
+  // async function runAiScan() {
+  //   if (!selectedFile) {
+  //     toast.warning('Please select an image first');
+  //     return;
+  //   }
 
-    setAiScanning(true);
-    setAiStatus('AI is scanning...');
+  //   setAiScanning(true);
+  //   setAiStatus('AI is scanning...');
 
-    try {
-      const formData = new FormData();
-      formData.append('image', selectedFile);
-      formData.append('location', form.location || 'Detected by AI');
+  //   try {
+  //     const formData = new FormData();
+  //     formData.append('image', selectedFile);
+  //     formData.append('location', form.location || 'Detected by AI');
 
-      const response = await fetch(`${API_BASE}/pothole-detect`, {
-        method: 'POST',
-        body: formData,
-      });
+  //     const response = await fetch(`${API_BASE}/pothole-detect`, {
+  //       method: 'POST',
+  //       body: formData,
+  //     });
 
-      const result = await response.json();
+  //     const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result?.error || `Server responded with ${response.status}`);
-      }
+  //     if (!response.ok) {
+  //       throw new Error(result?.error || `Server responded with ${response.status}`);
+  //     }
 
-      if (result.pothole) {
-        setForm((prev) => ({
-          ...prev,
-          type: 'road_damage',
-          severity: result.confidence > 75 ? 'high' : 'medium',
-          description: `[AI VERIFIED] Pothole detected with ${result.confidence}% confidence.`,
-        }));
+  //     if (result.pothole) {
+  //       setForm((prev) => ({
+  //         ...prev,
+  //         type: 'road_damage',
+  //         severity: result.confidence > 75 ? 'high' : 'medium',
+  //         description: `[AI VERIFIED] Pothole detected with ${result.confidence}% confidence.`,
+  //       }));
 
-        setAiStatus(`Pothole found (${result.confidence}%)`);
-        toast.success(`Pothole detected (${result.confidence}%)`);
-      } else {
-        setAiStatus('Road looks safe');
-        toast.info('No pothole detected');
-      }
-    } catch (err) {
-      console.error(err);
-      setAiStatus('AI scan failed');
-      toast.error('AI scan failed');
-    } finally {
-      setAiScanning(false);
-    }
-  }
+  //       setAiStatus(`Pothole found (${result.confidence}%)`);
+  //       toast.success(`Pothole detected (${result.confidence}%)`);
+  //     } else {
+  //       setAiStatus('Road looks safe');
+  //       toast.info('No pothole detected');
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     setAiStatus('AI scan failed');
+  //     toast.error('AI scan failed');
+  //   } finally {
+  //     setAiScanning(false);
+  //   }
+  // }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -260,8 +261,8 @@ export default function AlertModal({ open, onClose, onCreated }) {
         severity: 'medium',
         description: '',
       });
-      setSelectedFile(null);
-      setAiStatus('');
+      // setSelectedFile(null);
+      // setAiStatus('');
     } catch (err) {
       console.error(err);
       toast.error('Failed to create alert');
@@ -281,7 +282,7 @@ export default function AlertModal({ open, onClose, onCreated }) {
         </div>
 
         <form onSubmit={handleSubmit} className="alert-form">
-          <div className="ai-scan-box">
+          {/* <div className="ai-scan-box">
             <label className="ai-label">
               <i className="fas fa-robot"></i> AI Pothole / Damage Scan
             </label>
@@ -302,7 +303,7 @@ export default function AlertModal({ open, onClose, onCreated }) {
             </button>
 
             {aiStatus ? <p className="ai-status">{aiStatus}</p> : null}
-          </div>
+          </div> */}
 
           <div className="form-group">
             <label>Disaster Type</label>
@@ -311,7 +312,7 @@ export default function AlertModal({ open, onClose, onCreated }) {
               <option value="flood">Flood</option>
               <option value="earthquake">Earthquake</option>
               <option value="fire">Fire</option>
-              <option value="road_damage">Road Damage / Pothole</option>
+              {/* <option value="road_damage">Road Damage / Pothole</option> */}
             </select>
           </div>
 

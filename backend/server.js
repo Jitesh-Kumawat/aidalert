@@ -772,11 +772,72 @@ function hasCriticalKeywords(text = '') {
 }
 
 // AI pothole detect
-app.post('/api/pothole-detect', upload.single('image'), async (req, res) => {
+// app.post('/api/pothole-detect', upload.single('image'), async (req, res) => {
+//   try {
+//     if (!potholeModel) throw new Error('AI Model not ready');
+//     if (!req.file) throw new Error('No image uploaded');
+
+//     const image = await Jimp.read(req.file.path);
+//     image.resize({ w: 224, h: 224 });
+
+//     const { data, width, height } = image.bitmap;
+//     const values = new Float32Array(width * height * 3);
+
+//     for (let i = 0; i < width * height; i++) {
+//       values[i * 3] = data[i * 4] / 255.0;
+//       values[i * 3 + 1] = data[i * 4 + 1] / 255.0;
+//       values[i * 3 + 2] = data[i * 4 + 2] / 255.0;
+//     }
+
+//     const tensor = tf.tensor3d(values, [224, 224, 3]).expandDims(0);
+//     const prediction = potholeModel.predict(tensor);
+//     const score = (await prediction.data())[0];
+
+//     tensor.dispose();
+//     prediction.dispose();
+
+//     let alertCreated = false;
+//     if (score > 0.5) {
+//       await new Alert({
+//         type: 'road_damage',
+//         location: req.body.location || 'AI Detected',
+//         severity: score > 0.75 ? 'high' : 'medium',
+//         description: `[AI VERIFIED] Pothole detected with ${Math.round(score * 100)}% confidence.`,
+//         latitude: req.body.latitude || null,
+//         longitude: req.body.longitude || null,
+//       }).save();
+//       alertCreated = true;
+//     }
+
+//     res.json({
+//       pothole: score > 0.5,
+//       confidence: Math.round(score * 100),
+//       alertCreated,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   } finally {
+//     if (req.file && fs.existsSync(req.file.path)) {
+//       fs.unlinkSync(req.file.path);
+//     }
+//   }
+// });
+// CITIZEN AI ROUTE: Verifies images sent from the Flutter App
+app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
   try {
     if (!potholeModel) throw new Error('AI Model not ready');
     if (!req.file) throw new Error('No image uploaded');
 
+    // Get location data sent from Flutter
+    const { latitude, longitude, city, locationText } = req.body;
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    if (!city || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'Missing location data' });
+    }
+
+    // Process Image with AI Model
     const image = await Jimp.read(req.file.path);
     image.resize({ w: 224, h: 224 });
 
@@ -797,14 +858,20 @@ app.post('/api/pothole-detect', upload.single('image'), async (req, res) => {
     prediction.dispose();
 
     let alertCreated = false;
+    let potholeData = null;
+
+    // If AI confidence is > 50%, save it automatically!
     if (score > 0.5) {
-      await new Alert({
-        type: 'road_damage',
-        location: req.body.location || 'AI Detected',
+      potholeData = await new PotholeAlert({
+        city,
+        locationText: locationText || 'Citizen Reported Hazard',
+        latitude: lat,
+        longitude: lng,
+        coordinates: { type: 'Point', coordinates: [lng, lat] },
         severity: score > 0.75 ? 'high' : 'medium',
-        description: `[AI VERIFIED] Pothole detected with ${Math.round(score * 100)}% confidence.`,
-        latitude: req.body.latitude || null,
-        longitude: req.body.longitude || null,
+        confidence: Math.round(score * 100),
+        source: 'citizen',
+        status: 'active',
       }).save();
       alertCreated = true;
     }
@@ -813,10 +880,13 @@ app.post('/api/pothole-detect', upload.single('image'), async (req, res) => {
       pothole: score > 0.5,
       confidence: Math.round(score * 100),
       alertCreated,
+      data: potholeData
     });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   } finally {
+    // Delete image to save Render server storage
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
