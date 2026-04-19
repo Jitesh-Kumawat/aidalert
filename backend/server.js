@@ -655,7 +655,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const Jimp = require('jimp');
+const {Jimp }= require('jimp');
 const tf = require('@tensorflow/tfjs');
 
 const Alert = require('./models/Alert');
