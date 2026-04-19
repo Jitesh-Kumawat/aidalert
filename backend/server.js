@@ -700,9 +700,7 @@ mongoose
 let potholeModel = null;
 async function loadModel() {
   try {
-    // potholeModel = await tf.loadGraphModel(`http://127.0.0.1:${PORT}/model/model.json`);
-    const modelPath = `file://${path.join(__dirname, 'model', 'model.json')}`;
-potholeModel = await tf.loadGraphModel(modelPath);
+    potholeModel = await tf.loadGraphModel(`http://127.0.0.1:${PORT}/model/model.json`);
     console.log('AI Model Loaded');
   } catch (err) {
     console.error('AI Load Error:', err.message);
