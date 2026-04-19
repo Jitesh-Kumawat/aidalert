@@ -671,7 +671,7 @@ const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 
 // middleware
 app.use(cors({ origin: '*' }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 
 // static files
 app.use('/model', express.static(path.join(__dirname, 'model')));
@@ -824,27 +824,31 @@ function hasCriticalKeywords(text = '') {
 //     }
 //   }
 // });
-// CITIZEN AI ROUTE: Verifies images sent from the Flutter App
-app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
+// ENTERPRISE AI ROUTE: Base64 JSON Payload + AI Watchdog Timer
+app.post('/api/potholes/report', async (req, res) => {
   try {
-    if (!potholeModel) throw new Error('AI Model not ready');
-    if (!req.file) throw new Error('No image uploaded');
+    if (!potholeModel) throw new Error('AI Model is still booting. Please try again in 5 seconds.');
 
-    // Get location data sent from Flutter
-    const { latitude, longitude, city, locationText } = req.body;
+    const { latitude, longitude, city, locationText, imageBase64 } = req.body;
     const lat = Number(latitude);
     const lng = Number(longitude);
 
+    // 1. Validation
+    if (!imageBase64) throw new Error('No image provided in request');
     if (!city || !Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({ error: 'Missing location data' });
     }
 
-    // Process Image with AI Model
-    // inside the route:
-    const image = await Jimp.read(req.file.path);
+    console.log("1. Received Base64 Image payload...");
+
+    // 2. Decode Base64 Text back into an Image Buffer
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+
+    // 3. Process Image
+    console.log("2. Processing Image for AI...");
+    const image = await Jimp.read(imageBuffer);
     const resized = image.resize({ w: 224, h: 224 });
 
-    // New Jimp v1 way to get pixel data
     const width = resized.width;
     const height = resized.height;
     const values = new Float32Array(width * height * 3);
@@ -854,25 +858,40 @@ app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
         const pixel = resized.getPixelColor(x, y);
         const r = (pixel >>> 24) & 0xff;
         const g = (pixel >>> 16) & 0xff;
-        const b = (pixel >>> 8) & 0xff;
+        const b = (pixel >>> 8)  & 0xff;
         const idx = (y * width + x) * 3;
-        values[idx] = r / 255.0;
+        values[idx]     = r / 255.0;
         values[idx + 1] = g / 255.0;
         values[idx + 2] = b / 255.0;
       }
     }
 
-    const tensor = tf.tensor3d(values, [224, 224, 3]).expandDims(0);
-    const prediction = potholeModel.predict(tensor);
-    const score = (await prediction.data())[0];
+    console.log("3. Running TensorFlow Prediction...");
+    
+    // 4. THE WATCHDOG: Wrap the AI in a safe execution block
+    const runAI = async () => {
+        const tensor = tf.tensor3d(values, [224, 224, 3]).expandDims(0);
+        const prediction = potholeModel.predict(tensor);
+        const score = (await prediction.data())[0];
+        tensor.dispose();
+        prediction.dispose();
+        return score;
+    };
 
-    tensor.dispose();
-    prediction.dispose();
+    // If the ML math freezes the server for > 12 seconds, this kills it safely
+    const watchdogTimer = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("AI Processing Timeout: Server overloaded")), 12000)
+    );
 
+    // Race the AI against the clock!
+    const score = await Promise.race([runAI(), watchdogTimer]);
+    
+    console.log(`4. AI Scan Complete! Score: ${score}`);
+
+    // 5. Save to Database
     let alertCreated = false;
     let potholeData = null;
 
-    // If AI confidence is > 50%, save it automatically!
     if (score > 0.5) {
       potholeData = await new PotholeAlert({
         city,
@@ -888,7 +907,7 @@ app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
       alertCreated = true;
     }
 
-    res.json({
+    res.status(200).json({
       pothole: score > 0.5,
       confidence: Math.round(score * 100),
       alertCreated,
@@ -896,15 +915,10 @@ app.post('/api/potholes/report', upload.single('image'), async (req, res) => {
     });
 
   } catch (error) {
+    console.error("AI Route Error:", error.message);
     res.status(500).json({ error: error.message });
-  } finally {
-    // Delete image to save Render server storage
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
   }
 });
-
 // alerts API
 app.get('/api/alerts', async (req, res) => {
   try {
