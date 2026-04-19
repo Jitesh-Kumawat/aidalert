@@ -309,20 +309,31 @@ export default function IncidentReviewPage() {
   }
 
   async function updateStatus(id, status) {
-    setBusyId(id);
-    try {
-      await fetch(`${API_BASE}/api/incidents/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      await loadIncidents();
-    } catch (err) {
-      console.error('Failed to update incident', err);
-    } finally {
-      setBusyId(null);
+  setBusyId(id);
+
+  try {
+    const response = await fetch(`${API_BASE}/api/incidents/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `Failed with status ${response.status}`);
     }
+
+    await loadIncidents();
+    alert(`Incident updated to ${status}`);
+  } catch (err) {
+    console.error('Failed to update incident', err);
+    alert(`Update failed: ${err.message}`);
+  } finally {
+    setBusyId(null);
   }
+}
+
 
   useEffect(() => {
     loadIncidents();
@@ -461,6 +472,7 @@ export default function IncidentReviewPage() {
 
                       <div className="incident-actions">
                         <button
+                            type="button"
                           className="sos-btn dispatch"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'active')}
@@ -468,6 +480,7 @@ export default function IncidentReviewPage() {
                           Verify & Activate
                         </button>
                         <button
+                            type="button"
                           className="sos-btn resolve"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'resolved')}
@@ -475,6 +488,7 @@ export default function IncidentReviewPage() {
                           Resolve
                         </button>
                         <button
+                            type="button"
                           className="sos-btn incident-false-btn"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'false_report')}
