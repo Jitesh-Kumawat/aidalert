@@ -483,6 +483,41 @@ a {
 }
 
 
+.map-fullscreen-fab {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1001;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  color: white;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.24);
+  font-size: 1rem;
+}
+
+.map-fullscreen-fab:hover {
+  background: #1e293b;
+}
+
+.map-panel-shell-fullscreen {
+  background: #f8fafc;
+  padding: 18px;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.map-panel-shell-fullscreen .map-wrapper-react {
+  height: calc(100vh - 120px);
+}
+
+
 .dispatch-legend {
   position: absolute;
   left: 18px;

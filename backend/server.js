@@ -133,9 +133,8 @@ setInterval(async () => {
     console.error('ML ping failed:', e.message);
   }
 }, 10 * 60 * 1000);
-// ==========================================
-// 1. THE PERMANENT ML FIX (YOUR PYTHON API + SMART WAKE-UP)
-// ==========================================
+
+// 1.Priority model
 async function predictPriorityWithML(cleanMessageText, retries = 3) {
   const mlUrl = process.env.ML_SERVICE_URL || 'https://aidalert-ml.onrender.com';
 
@@ -172,14 +171,14 @@ async function predictPriorityWithML(cleanMessageText, retries = 3) {
 
       if (attempt === retries) return null; // Trigger fallback after 3 fails
 
-      // THE FIX: Wait 10 full seconds to give Python time to boot up!
+      //Wait 10 full seconds to give Python time to boot up!
       console.log("Waiting 10 seconds for Python server to wake up...");
       await new Promise(r => setTimeout(r, 10000));
     }
   }
 }
 
-// Expanded keyword list to catch things immediately without AI
+//critical keyword search for instant critical priority (bypassing ML)
 function hasCriticalKeywords(text = '') {
   const t = text.toLowerCase();
   const keywords = [
@@ -471,9 +470,8 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
 });
 
 
-// ==========================================
-// 2. THE PERMANENT ROUTING FIX
-// ==========================================
+
+// 2. routing api
 app.post('/api/helprequests', async (req, res) => {
   try {
     const body = { ...req.body };
