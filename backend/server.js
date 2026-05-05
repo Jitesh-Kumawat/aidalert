@@ -23,6 +23,8 @@ const Incident = require('./models/Incident');
 // middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '15mb' }));
+app.set('trust proxy', 1);
+
 
 // static files
 app.use('/model', express.static(path.join(__dirname, 'model')));
@@ -846,9 +848,11 @@ app.post('/api/incidents/report', upload.single('image'), async (req, res) => {
     const resolvedLocation =
       locationText?.trim() || city?.trim() || 'Citizen reported hazard';
 
-    const imageUrl = req.file
-      ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
-      : '';
+    // const imageUrl = req.file
+    //   ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
+    //   : '';
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : '';
+
 
     const incident = await new Incident({
       type: hazardType,

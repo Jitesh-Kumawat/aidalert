@@ -289,14 +289,17 @@ function formatDate(value) {
 export default function IncidentReviewPage() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-const [statusFilter, setStatusFilter] = useState('unverified');
+  const [statusFilter, setStatusFilter] = useState('unverified');
   const [busyId, setBusyId] = useState(null);
 
   async function loadIncidents() {
     setLoading(true);
     try {
       const query =
-        statusFilter === 'all' ? '' : `?status=${encodeURIComponent(statusFilter)}`;
+        statusFilter === 'all'
+          ? ''
+          : `?status=${encodeURIComponent(statusFilter)}`;
+
       const res = await fetch(`${API_BASE}/api/incidents${query}`);
       const data = await res.json();
       setIncidents(Array.isArray(data) ? data : []);
@@ -309,31 +312,30 @@ const [statusFilter, setStatusFilter] = useState('unverified');
   }
 
   async function updateStatus(id, status) {
-  setBusyId(id);
+    setBusyId(id);
 
-  try {
-    const response = await fetch(`${API_BASE}/api/incidents/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
+    try {
+      const response = await fetch(`${API_BASE}/api/incidents/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || `Failed with status ${response.status}`);
+      if (!response.ok) {
+        throw new Error(data.error || `Failed with status ${response.status}`);
+      }
+
+      await loadIncidents();
+      alert(`Incident updated to ${status}`);
+    } catch (err) {
+      console.error('Failed to update incident', err);
+      alert(`Update failed: ${err.message}`);
+    } finally {
+      setBusyId(null);
     }
-
-    await loadIncidents();
-    alert(`Incident updated to ${status}`);
-  } catch (err) {
-    console.error('Failed to update incident', err);
-    alert(`Update failed: ${err.message}`);
-  } finally {
-    setBusyId(null);
   }
-}
-
 
   useEffect(() => {
     loadIncidents();
@@ -372,7 +374,7 @@ const [statusFilter, setStatusFilter] = useState('unverified');
               ))}
             </select>
 
-            <button className="sos-refresh-btn" onClick={loadIncidents}>
+            <button type="button" className="sos-refresh-btn" onClick={loadIncidents}>
               <i className="fas fa-rotate-right"></i> Refresh
             </button>
           </div>
@@ -429,6 +431,10 @@ const [statusFilter, setStatusFilter] = useState('unverified');
             {incidents.map((item) => {
               const isBusy = busyId === item._id;
 
+              const resolvedImageUrl = item.imageUrl?.startsWith('/uploads/')
+                ? `${API_BASE}${item.imageUrl}`
+                : String(item.imageUrl || '').replace('http://', 'https://');
+
               return (
                 <article key={item._id} className="incident-card">
                   <div className="incident-card-header">
@@ -439,10 +445,18 @@ const [statusFilter, setStatusFilter] = useState('unverified');
                           {(item.severity || 'medium').toUpperCase()}
                         </span>
                       </div>
+
                       <div className="incident-meta">
-                        <span><i className="fas fa-location-dot"></i> {item.locationText || 'Unknown location'}</span>
-                        <span><i className="fas fa-tag"></i> {formatType(item.type)}</span>
-                        <span><i className="fas fa-clock"></i> {formatDate(item.createdAt)}</span>
+                        <span>
+                          <i className="fas fa-location-dot"></i>{' '}
+                          {item.locationText || 'Unknown location'}
+                        </span>
+                        <span>
+                          <i className="fas fa-tag"></i> {formatType(item.type)}
+                        </span>
+                        <span>
+                          <i className="fas fa-clock"></i> {formatDate(item.createdAt)}
+                        </span>
                       </div>
                     </div>
 
@@ -454,7 +468,14 @@ const [statusFilter, setStatusFilter] = useState('unverified');
                   <div className="incident-body">
                     {item.imageUrl ? (
                       <div className="incident-image-wrap">
-                        <img className="incident-image" src={item.imageUrl} alt={item.title || item.type} />
+                        <img
+                          className="incident-image"
+                          src={resolvedImageUrl}
+                          alt={item.title || item.type}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                       </div>
                     ) : null}
 
@@ -464,31 +485,49 @@ const [statusFilter, setStatusFilter] = useState('unverified');
                       </p>
 
                       <div className="incident-data-grid">
-                        <div><strong>Source</strong><span>{item.source || 'citizen'}</span></div>
-                        <div><strong>Confidence</strong><span>{item.confidence != null ? `${item.confidence}%` : 'Pending'}</span></div>
-                        <div><strong>Radius</strong><span>{item.alertRadiusMeters || 500} m</span></div>
-                        <div><strong>Verified</strong><span>{item.verifiedAt ? formatDate(item.verifiedAt) : 'Not yet'}</span></div>
+                        <div>
+                          <strong>Source</strong>
+                          <span>{item.source || 'citizen'}</span>
+                        </div>
+                        <div>
+                          <strong>Confidence</strong>
+                          <span>
+                            {item.confidence != null ? `${item.confidence}%` : 'Pending'}
+                          </span>
+                        </div>
+                        <div>
+                          <strong>Radius</strong>
+                          <span>{item.alertRadiusMeters || 500} m</span>
+                        </div>
+                        <div>
+                          <strong>Verified</strong>
+                          <span>
+                            {item.verifiedAt ? formatDate(item.verifiedAt) : 'Not yet'}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="incident-actions">
                         <button
-                            type="button"
+                          type="button"
                           className="sos-btn dispatch"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'active')}
                         >
                           Verify & Activate
                         </button>
+
                         <button
-                            type="button"
+                          type="button"
                           className="sos-btn resolve"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'resolved')}
                         >
                           Resolve
                         </button>
+
                         <button
-                            type="button"
+                          type="button"
                           className="sos-btn incident-false-btn"
                           disabled={isBusy}
                           onClick={() => updateStatus(item._id, 'false_report')}
