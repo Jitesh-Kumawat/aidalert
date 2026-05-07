@@ -19,6 +19,8 @@ const reactDistPath = path.join(__dirname, '../frontend-react/dist');
 
 const Incident = require('./models/Incident');
 
+const admin = require('firebase-admin');
+
 
 // middleware
 app.use(cors({ origin: '*' }));
@@ -45,6 +47,74 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
 });
 const upload = multer({ storage });
+
+//Firebase init block
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }),
+  });
+}
+
+const GOVT_HQ_COORDS = {
+  lat: 25.1433,
+  lng: 75.8080,
+};
+
+async function getDispatchEtaMinutes(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  const url =
+    `https://router.project-osrm.org/route/v1/driving/` +
+    `${GOVT_HQ_COORDS.lng},${GOVT_HQ_COORDS.lat};${longitude},${latitude}` +
+    `?overview=false`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const seconds = data?.routes?.[0]?.duration;
+
+    if (!seconds) return null;
+
+    return Math.max(1, Math.round(seconds / 60));
+  } catch (err) {
+    console.error('ETA route error:', err.message);
+    return null;
+  }
+}
+
+async function sendDispatchPush({ token, type, etaMinutes }) {
+  if (!token) return null;
+
+  const message = {
+    token,
+    notification: {
+      title: 'Rescue Team Dispatched',
+      body:
+        etaMinutes != null
+          ? `Team is on the way for ${type}. ETA: ${etaMinutes} min.`
+          : `Team is on the way for ${type}.`,
+    },
+    data: {
+      type: 'dispatch_update',
+      emergencyType: String(type || ''),
+      etaMinutes: etaMinutes != null ? String(etaMinutes) : '',
+    },
+    android: {
+      priority: 'high',
+    },
+  };
+
+  return await admin.messaging().send(message);
+}
+
 
 //incident type config
 const INCIDENT_TYPE_CONFIG = {
@@ -474,64 +544,175 @@ app.post('/api/helprequests/recalculate-scores', async (req, res) => {
 
 
 // 2. routing api
-app.post('/api/helprequests', async (req, res) => {
+// app.post('/api/helprequests', async (req, res) => {
+//   try {
+//     const body = { ...req.body };
+//     body.people = parseInt(body.people, 10) || 1;
+
+//     // Isolate the description text
+//     const descriptionText = (body.description || '').trim();
+//     // Message with location is only used for the keyword search
+//     const messageWithLocation = `${descriptionText} ${body.location || ''}`.trim();
+
+//     // SCENARIO A: Critical Keywords Found -> Instant Save, No ML
+//     if (hasCriticalKeywords(messageWithLocation)) {
+//       body.urgency = 'critical';
+//       body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
+//       body.prioritySource = 'rule';
+//       body.modelConfidence = 1.0;
+
+//       // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
+//     } else if (descriptionText === '') {
+//       body.urgency = getUrgencyFromType(body.type);
+//       body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+//       body.prioritySource = 'dropdown_default';
+//       body.modelConfidence = 1.0;
+
+//       // SCENARIO C: Custom Text -> Send ONLY the text to Python
+//     } else {
+//       const ml = await predictPriorityWithML(descriptionText);
+
+//       if (ml) {
+//         // ML succeeded!
+//         body.urgency = ml.priority;
+//         body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+//         body.prioritySource = 'ml';
+//         body.modelConfidence = ml.confidence;
+//       } else {
+//         // ML completely failed. Use safety fallback.
+//         body.urgency = getUrgencyFromType(body.type);
+//         body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+//         body.prioritySource = 'ml_fallback';
+//         body.modelConfidence = 0.5;
+//       }
+//     }
+
+//     const request = await new HelpRequest(body).save();
+//     res.status(201).json(request);
+//   } catch (err) {
+//     console.error("SOS Creation Error Details:", err);
+//     res.status(400).json({ error: err.message });
+//   }
+// });
+app.post('/api/helprequests', upload.single('image'), async (req, res) => {
   try {
     const body = { ...req.body };
     body.people = parseInt(body.people, 10) || 1;
+    body.latitude =
+      body.latitude !== undefined && body.latitude !== ''
+        ? Number(body.latitude)
+        : null;
+    body.longitude =
+      body.longitude !== undefined && body.longitude !== ''
+        ? Number(body.longitude)
+        : null;
 
-    // Isolate the description text
     const descriptionText = (body.description || '').trim();
-    // Message with location is only used for the keyword search
     const messageWithLocation = `${descriptionText} ${body.location || ''}`.trim();
 
-    // SCENARIO A: Critical Keywords Found -> Instant Save, No ML
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : '';
+
     if (hasCriticalKeywords(messageWithLocation)) {
       body.urgency = 'critical';
-      body.priorityScore = calculatePriorityScore('critical', body.people, new Date());
+      body.priorityScore = calculatePriorityScore(
+        'critical',
+        body.people,
+        new Date()
+      );
       body.prioritySource = 'rule';
       body.modelConfidence = 1.0;
-
-      // SCENARIO B: Empty Description -> Use Dropdown Type, No ML
     } else if (descriptionText === '') {
       body.urgency = getUrgencyFromType(body.type);
-      body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+      body.priorityScore = calculatePriorityScore(
+        body.urgency,
+        body.people,
+        new Date()
+      );
       body.prioritySource = 'dropdown_default';
       body.modelConfidence = 1.0;
-
-      // SCENARIO C: Custom Text -> Send ONLY the text to Python
     } else {
       const ml = await predictPriorityWithML(descriptionText);
 
       if (ml) {
-        // ML succeeded!
         body.urgency = ml.priority;
-        body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+        body.priorityScore = calculatePriorityScore(
+          body.urgency,
+          body.people,
+          new Date()
+        );
         body.prioritySource = 'ml';
         body.modelConfidence = ml.confidence;
       } else {
-        // ML completely failed. Use safety fallback.
         body.urgency = getUrgencyFromType(body.type);
-        body.priorityScore = calculatePriorityScore(body.urgency, body.people, new Date());
+        body.priorityScore = calculatePriorityScore(
+          body.urgency,
+          body.people,
+          new Date()
+        );
         body.prioritySource = 'ml_fallback';
         body.modelConfidence = 0.5;
       }
     }
 
-    const request = await new HelpRequest(body).save();
+    const request = await new HelpRequest({
+      ...body,
+      imageUrl,
+      fcmToken: body.fcmToken || '',
+    }).save();
+
     res.status(201).json(request);
   } catch (err) {
-    console.error("SOS Creation Error Details:", err);
+    console.error('SOS Creation Error Details:', err);
     res.status(400).json({ error: err.message });
   }
 });
 
+
+// app.patch('/api/helprequests/:id/status', async (req, res) => {
+//   try {
+//     const request = await HelpRequest.findByIdAndUpdate(
+//       req.params.id,
+//       { status: req.body.status },
+//       { new: true }
+//     );
+//     res.json(request);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+
 app.patch('/api/helprequests/:id/status', async (req, res) => {
   try {
-    const request = await HelpRequest.findByIdAndUpdate(
-      req.params.id,
-      { status: req.body.status },
-      { new: true }
-    );
+    const request = await HelpRequest.findById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ error: 'Help request not found' });
+    }
+
+    request.status = req.body.status;
+
+    if (req.body.status === 'assigned') {
+      const etaMinutes = await getDispatchEtaMinutes(
+        request.latitude,
+        request.longitude
+      );
+
+      request.dispatchEtaMinutes = etaMinutes;
+
+      try {
+        await sendDispatchPush({
+          token: request.fcmToken,
+          type: request.type,
+          etaMinutes,
+        });
+        request.pushSentAt = new Date();
+      } catch (pushErr) {
+        console.error('Dispatch push failed:', pushErr.message);
+      }
+    }
+
+    await request.save();
     res.json(request);
   } catch (err) {
     res.status(500).json({ error: err.message });
